@@ -1,25 +1,29 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
+	"strings"
 )
+
+// Informer is the function type that ''in some way'' retrieves the movie details
+type Informer func(name string, year int, path string, ch chan Movie)
 
 // Movie information is saved in this struct
 type Movie struct {
-	name                              string
-	path                              string
-	gener                             []string
-	imdbID, year, vote, rate, runtime int
-}
-
-func (m Movie) String() string {
-	return fmt.Sprintf("%s, %s, %d, %d, %v", m.name, m.path, m.year, m.rate, m.gener)
+	name            string
+	path            string
+	genre           []string
+	imdbID, runtime string
+	year, vote      int
+	rate            float64
 }
 
 func help(programName string) string {
@@ -78,8 +82,61 @@ func populateMovieList(path string) map[string]Movie {
 	return movies
 }
 
-func omdbInformer(movies map[string]Movie) {
+func omdbInformer(name string, year int, path string, ch chan Movie) {
+	// when finished give done
+	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", "c3658413", name, year)
+	apiHTTP = strings.ReplaceAll(apiHTTP, " ", "%20")
+	log.Println(apiHTTP)
+	resp, err := http.Get(apiHTTP)
+	if err != nil {
+		log.Printf("Error getting movie details for %s", apiHTTP)
+		return
+	}
 
+	data, _ := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(data))
+	var raw map[string]interface{}
+	json.Unmarshal(data, &raw)
+	if raw["Response"].(string) == "False" {
+		log.Printf("Movie %s not found", name)
+		return
+	}
+	var (
+		rate  float64
+		vote  int
+		genre []string
+	)
+	if ss, ok := raw["imdbRating"].(string); ok {
+		rate, _ = strconv.ParseFloat(ss, 2)
+	}
+	runtime, _ := raw["Runtime"].(string)
+	if ss, ok := raw["imdbVotes"].(string); ok {
+		ss = strings.ReplaceAll(ss, ",", "")
+		vote, _ = strconv.Atoi(ss)
+	}
+	imdbID, _ := raw["imdbID"].(string)
+	if ss, ok := raw["Genre"].(string); ok {
+		genre = strings.Split(ss, ",")
+	}
+
+	movie := Movie{name, path, genre, imdbID, runtime, year, vote, rate}
+	ch <- movie
+}
+
+func getMovieInformation(movies map[string]Movie, movieInformer Informer) map[string]Movie {
+	ch := make(chan Movie)
+	for _, m := range movies {
+		go movieInformer(m.name, m.year, m.path, ch)
+	}
+
+	lenM := len(movies)
+	filledMovies := make(map[string]Movie)
+	for i := 0; i < lenM; i++ {
+		m := <-ch
+		filledMovies[m.name] = m
+	}
+	close(ch)
+	return filledMovies
 }
 
 func main() {
@@ -106,7 +163,7 @@ func main() {
 		log.Println("No sorting requested")
 	}
 	movies := populateMovieList(path)
-	currentInformer(movies)
+	movies = getMovieInformation(movies, currentInformer)
 	for _, m := range movies {
 		fmt.Println(m)
 	}
