@@ -54,8 +54,8 @@ func extractNameAndYear(basePath string) (string, int, error) {
 	return name, year, err
 }
 
-func populateMovieList(path string) map[string]Movie {
-	movies := make(map[string]Movie)
+func populateMovieList(path string) []Movie {
+	var movies []Movie
 	r := regexp.MustCompile("(?i)(mp4|avi|mkv)")
 
 	err := filepath.Walk(path,
@@ -71,7 +71,7 @@ func populateMovieList(path string) map[string]Movie {
 				if err != nil {
 					log.Println(err)
 				}
-				movies[name] = Movie{name: name, path: fullPath, year: year}
+				movies = append(movies, Movie{name: name, path: fullPath, year: year})
 				log.Printf("%s, %s\n", basePath, filepath.Ext(basePath))
 			}
 			return nil
@@ -94,7 +94,6 @@ func omdbInformer(name string, year int, path string, ch chan Movie) {
 	}
 
 	data, _ := ioutil.ReadAll(resp.Body)
-	fmt.Println(string(data))
 	var raw map[string]interface{}
 	json.Unmarshal(data, &raw)
 	if raw["Response"].(string) == "False" {
@@ -119,21 +118,20 @@ func omdbInformer(name string, year int, path string, ch chan Movie) {
 		genre = strings.Split(ss, ",")
 	}
 
-	movie := Movie{name, path, genre, imdbID, runtime, year, vote, rate}
-	ch <- movie
+	ch <- Movie{name, path, genre, imdbID, runtime, year, vote, rate}
 }
 
-func getMovieInformation(movies map[string]Movie, movieInformer Informer) map[string]Movie {
+func getMovieInformation(movies []Movie, movieInformer Informer) []Movie {
 	ch := make(chan Movie)
 	for _, m := range movies {
 		go movieInformer(m.name, m.year, m.path, ch)
 	}
 
 	lenM := len(movies)
-	filledMovies := make(map[string]Movie)
+	filledMovies := make([]Movie, lenM)
 	for i := 0; i < lenM; i++ {
 		m := <-ch
-		filledMovies[m.name] = m
+		filledMovies[i] = m
 	}
 	close(ch)
 	return filledMovies
