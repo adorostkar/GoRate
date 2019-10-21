@@ -13,6 +13,18 @@ import (
 	"strings"
 )
 
+const goUsage = `GoRate is a tool to fetch information of movies listed under a folder
+
+USAGE: gr <folder name> <options>
+    OPTIONS:
+        - name
+        - vote
+        - rate
+        - year
+        - genre
+        - runtime
+`
+
 // Informer is the function type that ''in some way'' retrieves the movie details
 type Informer func(name string, year int, path string, ch chan Movie)
 
@@ -26,37 +38,43 @@ type Movie struct {
 	rate            float64
 }
 
-func help(programName string) string {
-	return fmt.Sprintf("USAGE: %s <folder name> <options>\n"+
-		"OPTIONS:\n"+
-		"    - name\n"+
-		"    - vote\n"+
-		"    - rate\n"+
-		"    - year\n"+
-		"    - genre\n"+
-		"    - runtime", programName)
+// Config file to pass around
+type Config struct {
+	nameParserExpression []string
+	replacerExpression   string
+	extensionExpression  string
+	informer             Informer
 }
 
-func extractNameAndYear(basePath string) (string, int, error) {
-	extractor := regexp.MustCompile("([\\p{L}\\d'`\\._\\-!\\&, ]+)[_\\- \\.\\(]*(\\d{4})[_\\- \\.\\)]")
-	repl := regexp.MustCompile("[\\.\\-_ ]")
-	matches := extractor.FindStringSubmatch(basePath)
-	if len(matches) == 0 {
-		log.Printf("Cannot extract info for file %s\n", basePath)
-		return "", 0, fmt.Errorf("Can't find name and year from path format")
-	}
-
-	name := repl.ReplaceAllString(matches[1], " ")
-	year, err := strconv.Atoi(matches[2])
+func extractNameAndYear(basePath string, config Config) (string, int, error) {
+	repl, err := regexp.Compile(config.replacerExpression)
 	if err != nil {
-		log.Printf("Could not retrieve the year from its string %s\n", matches[2])
+		log.Printf("String '%s' is not a valid regular expression", config.replacerExpression)
 	}
-	return name, year, err
+	for _, rs := range config.nameParserExpression {
+		extractor, err := regexp.Compile(rs)
+		if err != nil {
+			log.Printf("String '%s' is not a valid regular expression", rs)
+		}
+		matches := extractor.FindStringSubmatch(basePath)
+		if len(matches) == 0 {
+			log.Printf("Cannot extract info for file %s, with regex %s\n", basePath, rs)
+			continue
+		}
+
+		name := repl.ReplaceAllString(matches[1], " ")
+		year, err := strconv.Atoi(matches[2])
+		if err != nil {
+			log.Printf("Could not retrieve the year from its string %s\n", matches[2])
+		}
+		return name, year, err
+	}
+	return "", 0, fmt.Errorf("Could not extract info with any of the provided regular expressions for the movie %s", basePath)
 }
 
-func populateMovieList(path string) []Movie {
+func populateMovieList(path string, config Config) []Movie {
 	var movies []Movie
-	r := regexp.MustCompile("(?i)(mp4|avi|mkv)")
+	r := regexp.MustCompile(config.extensionExpression)
 
 	err := filepath.Walk(path,
 		func(thisPath string, info os.FileInfo, err error) error {
@@ -67,7 +85,7 @@ func populateMovieList(path string) []Movie {
 				return err
 			}
 			if r.MatchString(filepath.Ext(basePath)) {
-				name, year, err := extractNameAndYear(basePath)
+				name, year, err := extractNameAndYear(basePath, config)
 				if err != nil {
 					log.Println(err)
 				}
@@ -121,33 +139,31 @@ func omdbInformer(name string, year int, path string, ch chan Movie) {
 	ch <- Movie{name, path, genre, imdbID, runtime, year, vote, rate}
 }
 
-func getMovieInformation(movies []Movie, movieInformer Informer) []Movie {
+func getMovieInformation(movies []Movie, config Config) []Movie {
 	ch := make(chan Movie)
 	for _, m := range movies {
-		go movieInformer(m.name, m.year, m.path, ch)
+		go config.informer(m.name, m.year, m.path, ch)
 	}
 
 	lenM := len(movies)
-	filledMovies := make([]Movie, lenM)
 	for i := 0; i < lenM; i++ {
 		m := <-ch
-		filledMovies[i] = m
+		movies[i] = m
 	}
 	close(ch)
-	return filledMovies
+	return movies
 }
 
 func main() {
 	log.SetOutput(ioutil.Discard)
 	if len(os.Args) < 2 {
 		log.Printf("%s\n", "Not enough input arguments")
-		fmt.Printf("%s\n", help(os.Args[0]))
+		fmt.Printf("%s\n", goUsage)
 		os.Exit(1)
 	}
 
 	moviePath := os.Args[1]
 	sortArray := os.Args[2:]
-	currentInformer := omdbInformer
 
 	path, err := filepath.Abs(moviePath)
 	if err != nil {
@@ -160,8 +176,16 @@ func main() {
 	} else {
 		log.Println("No sorting requested")
 	}
-	movies := populateMovieList(path)
-	movies = getMovieInformation(movies, currentInformer)
+
+	config := Config{
+		nameParserExpression: []string{`([\p{L}\d'\._\-!\&, ]+)[_\- \.\(]*(\d{4})[_\- \.\)]`},
+		replacerExpression:   `[\.\-_ ]`,
+		extensionExpression:  `(?i)(mp4|avi|mkv)`,
+		informer:             omdbInformer,
+	}
+
+	movies := populateMovieList(path, config)
+	movies = getMovieInformation(movies, config)
 	for _, m := range movies {
 		fmt.Println(m)
 	}
