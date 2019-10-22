@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,27 +16,23 @@ import (
 
 const goUsage = `GoRate is a tool to fetch information of movies listed under a folder
 
-USAGE: gr <folder name> <options>
-    OPTIONS:
-        - name
-        - vote
-        - rate
-        - year
-        - genre
-        - runtime
+USAGE: gr <folder paths>
 `
 
 // Informer is the function type that ''in some way'' retrieves the movie details
-type Informer func(name string, year int, path string, ch chan Movie)
+type Informer func(title string, year int, path string, ch chan Movie)
 
 // Movie information is saved in this struct
 type Movie struct {
-	name            string
-	path            string
-	genre           []string
-	imdbID, runtime string
-	year, vote      int
-	rate            float64
+	Title   string
+	Path    string
+	Genre   []string
+	ImdbID  string
+	Runtime string
+	Year    int
+	Vote    int
+	Rate    float64
+	Plot    string
 }
 
 // Config file to pass around
@@ -62,12 +59,12 @@ func extractNameAndYear(basePath string, config Config) (string, int, error) {
 			continue
 		}
 
-		name := repl.ReplaceAllString(matches[1], " ")
+		title := repl.ReplaceAllString(matches[1], " ")
 		year, err := strconv.Atoi(matches[2])
 		if err != nil {
 			log.Printf("Could not retrieve the year from its string %s\n", matches[2])
 		}
-		return name, year, err
+		return title, year, err
 	}
 	return "", 0, fmt.Errorf("Could not extract info with any of the provided regular expressions for the movie %s", basePath)
 }
@@ -85,11 +82,11 @@ func populateMovieList(path string, config Config) []Movie {
 				return err
 			}
 			if r.MatchString(filepath.Ext(basePath)) {
-				name, year, err := extractNameAndYear(basePath, config)
+				title, year, err := extractNameAndYear(basePath, config)
 				if err != nil {
 					log.Println(err)
 				}
-				movies = append(movies, Movie{name: name, path: fullPath, year: year})
+				movies = append(movies, Movie{Title: title, Path: fullPath, Year: year})
 				log.Printf("%s, %s\n", basePath, filepath.Ext(basePath))
 			}
 			return nil
@@ -100,9 +97,9 @@ func populateMovieList(path string, config Config) []Movie {
 	return movies
 }
 
-func omdbInformer(name string, year int, path string, ch chan Movie) {
+func omdbInformer(title string, year int, path string, ch chan Movie) {
 	// when finished give done
-	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", "c3658413", name, year)
+	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", "c3658413", title, year)
 	apiHTTP = strings.ReplaceAll(apiHTTP, " ", "%20")
 	log.Println(apiHTTP)
 	resp, err := http.Get(apiHTTP)
@@ -115,7 +112,7 @@ func omdbInformer(name string, year int, path string, ch chan Movie) {
 	var raw map[string]interface{}
 	json.Unmarshal(data, &raw)
 	if raw["Response"].(string) == "False" {
-		log.Printf("Movie %s not found", name)
+		log.Printf("Movie %s not found", title)
 		return
 	}
 	var (
@@ -135,14 +132,15 @@ func omdbInformer(name string, year int, path string, ch chan Movie) {
 	if ss, ok := raw["Genre"].(string); ok {
 		genre = strings.Split(ss, ",")
 	}
+	plot, _ := raw["Plot"].(string)
 
-	ch <- Movie{name, path, genre, imdbID, runtime, year, vote, rate}
+	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot}
 }
 
-func getMovieInformation(movies []Movie, config Config) []Movie {
+func getMovieInformation(movies []Movie, config Config) {
 	ch := make(chan Movie)
 	for _, m := range movies {
-		go config.informer(m.name, m.year, m.path, ch)
+		go config.informer(m.Title, m.Year, m.Path, ch)
 	}
 
 	lenM := len(movies)
@@ -151,8 +149,57 @@ func getMovieInformation(movies []Movie, config Config) []Movie {
 		movies[i] = m
 	}
 	close(ch)
-	return movies
 }
+
+// var report = template.Must(template.New("report").Parse(`Movies:
+// {{range .}}-------------------------------------------------
+// Title  : {{.Title}}
+// Genre  : {{.Genre}}
+// Runtime: {{.Runtime}}
+// Year   : {{.Year}}
+// Vote   : {{.Vote}}
+// Rate   : {{.Rate}}
+// URL    : www.imdb.com/title/{{.ImdbID}}
+// {{end}}
+// -------------------------------------------
+// Total count: {{. | len}}`))
+
+var report = template.Must(template.New("report").Parse(`
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+    <meta charset="UTF-8">
+    <meta name="MoviesList" content="width=device-width, initial-scale=1">
+    <title>Movies List</title>
+	<script src="https://kryogenix.org/code/browser/sorttable/sorttable.js"></script>
+</head>
+	<body>
+		<h1>{{. | len}} Movies found</h1>
+		<table class="sortable">
+			<tr style='text-align: left'>
+			<th>#</th>
+			<th>Title</th>
+			<th>Genre</th>
+			<th>Year</th>
+			<th>Runtime</th>
+			<th>Vote</th>
+			<th>Rate</th>
+			</tr>
+			{{range .}}
+			<tr>
+			<td></td>
+			<td title="{{.Plot}}"><a href="http://www.imdb.com/title/{{.ImdbID}}">{{.Title}}</a></td>
+			<td>{{.Genre}}</td>
+			<td>{{.Year}}</td>
+			<td>{{.Runtime}}</td>
+			<td>{{.Vote}}</td>
+			<td>{{.Rate}}</td>
+			</tr>
+			{{end}}
+		</table>
+	</body>
+</html>
+`))
 
 func main() {
 	log.SetOutput(ioutil.Discard)
@@ -163,7 +210,6 @@ func main() {
 	}
 
 	moviePath := os.Args[1]
-	sortArray := os.Args[2:]
 
 	path, err := filepath.Abs(moviePath)
 	if err != nil {
@@ -171,11 +217,6 @@ func main() {
 		os.Exit(1)
 	}
 	log.Printf("Given Path is %s\n", path)
-	if len(sortArray) > 0 {
-		log.Printf("Sorting %v requested", sortArray)
-	} else {
-		log.Println("No sorting requested")
-	}
 
 	config := Config{
 		nameParserExpression: []string{`([\p{L}\d'\._\-!\&, ]+)[_\- \.\(]*(\d{4})[_\- \.\)]`},
@@ -185,8 +226,16 @@ func main() {
 	}
 
 	movies := populateMovieList(path, config)
-	movies = getMovieInformation(movies, config)
-	for _, m := range movies {
-		fmt.Println(m)
-	}
+	getMovieInformation(movies, config)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if err := report.Execute(w, movies); err != nil {
+			log.Fatal(err)
+		}
+	})
+	http.ListenAndServe(":8080", nil)
+
+	// if err := report.Execute(os.Stdout, movies); err != nil {
+	// 	log.Fatal(err)
+	// }
 }
