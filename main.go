@@ -37,16 +37,16 @@ type Movie struct {
 
 // Config file to pass around
 type Config struct {
-	nameParserExpression []string
-	replacerExpression   string
-	extensionExpression  string
-	informer             Informer
+	nameParserExpression   []string
+	titleCleanupExpression string
+	extensionExpression    string
+	informer               Informer
 }
 
 func extractNameAndYear(basePath string, config Config) (string, int, error) {
-	repl, err := regexp.Compile(config.replacerExpression)
+	repl, err := regexp.Compile(config.titleCleanupExpression)
 	if err != nil {
-		log.Printf("String '%s' is not a valid regular expression", config.replacerExpression)
+		log.Printf("String '%s' is not a valid regular expression", config.titleCleanupExpression)
 	}
 	for _, rs := range config.nameParserExpression {
 		extractor, err := regexp.Compile(rs)
@@ -107,6 +107,7 @@ func omdbInformer(title string, year int, path string, ch chan Movie) {
 		log.Printf("Error getting movie details for %s", apiHTTP)
 		return
 	}
+	defer resp.Body.Close()
 
 	data, _ := ioutil.ReadAll(resp.Body)
 	var raw map[string]interface{}
@@ -151,19 +152,6 @@ func getMovieInformation(movies []Movie, config Config) {
 	close(ch)
 }
 
-// var report = template.Must(template.New("report").Parse(`Movies:
-// {{range .}}-------------------------------------------------
-// Title  : {{.Title}}
-// Genre  : {{.Genre}}
-// Runtime: {{.Runtime}}
-// Year   : {{.Year}}
-// Vote   : {{.Vote}}
-// Rate   : {{.Rate}}
-// URL    : www.imdb.com/title/{{.ImdbID}}
-// {{end}}
-// -------------------------------------------
-// Total count: {{. | len}}`))
-
 var report = template.Must(template.New("report").Parse(`
 <!DOCTYPE html>
 <html lang="en-US">
@@ -172,12 +160,12 @@ var report = template.Must(template.New("report").Parse(`
     <meta name="MoviesList" content="width=device-width, initial-scale=1">
     <title>Movies List</title>
 	<script src="https://kryogenix.org/code/browser/sorttable/sorttable.js"></script>
+	<link rel="stylesheet" href="/static/css/styles.css">
 </head>
 	<body>
 		<h1>{{. | len}} Movies found</h1>
-		<table class="sortable">
+		<table id="hor-minimalist-a" class="sortable">
 			<tr style='text-align: left'>
-			<th>#</th>
 			<th>Title</th>
 			<th>Genre</th>
 			<th>Year</th>
@@ -187,9 +175,8 @@ var report = template.Must(template.New("report").Parse(`
 			</tr>
 			{{range .}}
 			<tr>
-			<td></td>
 			<td title="{{.Plot}}"><a href="http://www.imdb.com/title/{{.ImdbID}}">{{.Title}}</a></td>
-			<td>{{.Genre}}</td>
+			<td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}}, {{end}}{{$value}}{{end}}</td>
 			<td>{{.Year}}</td>
 			<td>{{.Runtime}}</td>
 			<td>{{.Vote}}</td>
@@ -209,9 +196,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	moviePath := os.Args[1]
-
-	path, err := filepath.Abs(moviePath)
+	path, err := filepath.Abs(os.Args[1])
 	if err != nil {
 		log.Fatal("Could not expand path")
 		os.Exit(1)
@@ -219,15 +204,17 @@ func main() {
 	log.Printf("Given Path is %s\n", path)
 
 	config := Config{
-		nameParserExpression: []string{`([\p{L}\d'\._\-!\&, ]+)[_\- \.\(]*(\d{4})[_\- \.\)]`},
-		replacerExpression:   `[\.\-_ ]`,
-		extensionExpression:  `(?i)(mp4|avi|mkv)`,
-		informer:             omdbInformer,
+		nameParserExpression:   []string{`([\p{L}\d'\._\-!\&, ]+)[_\- \.\(]*(\d{4})[_\- \.\)]`},
+		titleCleanupExpression: `[\.\-_ ]`,
+		extensionExpression:    `(?i)(mp4|avi|mkv)`,
+		informer:               omdbInformer,
 	}
 
 	movies := populateMovieList(path, config)
 	getMovieInformation(movies, config)
 
+	fs := http.FileServer(http.Dir("static/"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if err := report.Execute(w, movies); err != nil {
 			log.Fatal(err)
