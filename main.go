@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -186,6 +187,9 @@ func main() {
 
 	movies := populateMovieList(path, config)
 	getMovieInformation(movies, config)
+	sort.Slice(movies, func(i, j int) bool {
+		return movies[i].Title < movies[j].Title
+	})
 
 	report := template.Must(template.ParseFiles("assets/layout.html"))
 

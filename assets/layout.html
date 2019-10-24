@@ -22,7 +22,16 @@
     </tr>
     {{range .}}
     <tr>
-      <td title="{{.Plot}}"><a href="http://www.imdb.com/title/{{.ImdbID}}">{{.Title}}</a></td>
+      <td onclick="location.href='http\://www.imdb.com/title/{{.ImdbID}}'">
+        <div class="tooltip">
+          {{.Title}}
+          <div class="right">
+              <h3>Summary</h3>
+              <i></i>
+              {{.Plot}}
+          </div>
+      </div>
+      </td>
       <td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}
       </td>
       <td>{{.Year}}</td>
