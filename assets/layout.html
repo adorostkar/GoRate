@@ -1,33 +1,37 @@
 <!DOCTYPE html>
 <html lang="en-US">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="MoviesList" content="width=device-width, initial-scale=1">
-    <title>Movies List</title>
-	<script src="https://kryogenix.org/code/browser/sorttable/sorttable.js"></script>
-	<link rel="stylesheet" href="/static/css/styles.css">
+  <meta charset="UTF-8">
+  <meta name="MoviesList" content="width=device-width, initial-scale=1">
+  <title>Movies List</title>
+  <script src="https://kryogenix.org/code/browser/sorttable/sorttable.js"></script>
+  <link rel="stylesheet" href="/static/css/styles.css">
 </head>
-	<body>
-		<h1>{{. | len}} Movies found</h1>
-		<table id="hor-minimalist-a" class="sortable">
-			<tr style='text-align: left'>
-			<th>Title</th>
-			<th>Genre</th>
-			<th>Year</th>
-			<th>Runtime</th>
-			<th>Vote</th>
-			<th>Rate</th>
-			</tr>
-			{{range .}}
-			<tr>
-			<td title="{{.Plot}}"><a href="http://www.imdb.com/title/{{.ImdbID}}">{{.Title}}</a></td>
-			<td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}}, {{end}}{{$value}}{{end}}</td>
-			<td>{{.Year}}</td>
-			<td>{{.Runtime}}</td>
-			<td>{{.Vote}}</td>
-			<td>{{.Rate}}</td>
-			</tr>
-			{{end}}
-		</table>
-	</body>
+
+<body>
+  <h1>{{. | len}} Movies found</h1>
+  <table id="hor-minimalist-a" class="sortable">
+    <tr style='text-align: left'>
+      <th>Title</th>
+      <th>Genre</th>
+      <th>Year</th>
+      <th>Runtime</th>
+      <th>Vote</th>
+      <th>Rate</th>
+    </tr>
+    {{range .}}
+    <tr>
+      <td title="{{.Plot}}"><a href="http://www.imdb.com/title/{{.ImdbID}}">{{.Title}}</a></td>
+      <td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}
+      </td>
+      <td>{{.Year}}</td>
+      <td>{{.Runtime}}</td>
+      <td>{{.Vote}}</td>
+      <td>{{.Rate}}</td>
+    </tr>
+    {{end}}
+  </table>
+</body>
+
 </html>

@@ -19,8 +19,8 @@ const goUsage = `GoRate is a tool to fetch information of movies listed under a 
 USAGE: gr <folder paths>
 `
 
-// Informer is the function type that ''in some way'' retrieves the movie details
-type Informer func(title string, year int, path string, ch chan Movie)
+// InformerFunc is the function type that ''in some way'' retrieves the movie details
+type InformerFunc func(title string, year int, path string, config Config, ch chan Movie)
 
 // Movie information is saved in this struct
 type Movie struct {
@@ -37,18 +37,19 @@ type Movie struct {
 
 // Config file to pass around
 type Config struct {
-	nameParserExpression   []string
-	titleCleanupExpression string
-	extensionExpression    string
-	informer               Informer
+	NameParserExpression   []string
+	TitleCleanupExpression string
+	ExtensionExpression    string
+	APIKey                 string
+	Informer               InformerFunc
 }
 
 func extractNameAndYear(basePath string, config Config) (string, int, error) {
-	repl, err := regexp.Compile(config.titleCleanupExpression)
+	repl, err := regexp.Compile(config.TitleCleanupExpression)
 	if err != nil {
-		log.Printf("String '%s' is not a valid regular expression", config.titleCleanupExpression)
+		log.Printf("String '%s' is not a valid regular expression", config.TitleCleanupExpression)
 	}
-	for _, rs := range config.nameParserExpression {
+	for _, rs := range config.NameParserExpression {
 		extractor, err := regexp.Compile(rs)
 		if err != nil {
 			log.Printf("String '%s' is not a valid regular expression", rs)
@@ -71,7 +72,7 @@ func extractNameAndYear(basePath string, config Config) (string, int, error) {
 
 func populateMovieList(path string, config Config) []Movie {
 	var movies []Movie
-	r := regexp.MustCompile(config.extensionExpression)
+	r := regexp.MustCompile(config.ExtensionExpression)
 
 	err := filepath.Walk(path,
 		func(thisPath string, info os.FileInfo, err error) error {
@@ -97,9 +98,9 @@ func populateMovieList(path string, config Config) []Movie {
 	return movies
 }
 
-func omdbInformer(title string, year int, path string, ch chan Movie) {
+func omdbInformer(title string, year int, path string, config Config, ch chan Movie) {
 	// when finished give done
-	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", "c3658413", title, year)
+	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", config.APIKey, title, year)
 	apiHTTP = strings.ReplaceAll(apiHTTP, " ", "%20")
 	log.Println(apiHTTP)
 	resp, err := http.Get(apiHTTP)
@@ -141,7 +142,7 @@ func omdbInformer(title string, year int, path string, ch chan Movie) {
 func getMovieInformation(movies []Movie, config Config) {
 	ch := make(chan Movie)
 	for _, m := range movies {
-		go config.informer(m.Title, m.Year, m.Path, ch)
+		go config.Informer(m.Title, m.Year, m.Path, config, ch)
 	}
 
 	lenM := len(movies)
@@ -167,12 +168,21 @@ func main() {
 	}
 	log.Printf("Given Path is %s\n", path)
 
-	config := Config{
-		nameParserExpression:   []string{`([\p{L}\d'\._\-!\&, ]+)[_\- \.\(]*(\d{4})[_\- \.\)]`},
-		titleCleanupExpression: `[\.\-_ ]`,
-		extensionExpression:    `(?i)(mp4|avi|mkv)`,
-		informer:               omdbInformer,
+	configFile, err := os.Open("assets/config.json")
+	if err != nil {
+		fmt.Println(err)
 	}
+	defer configFile.Close()
+
+	byteValue, _ := ioutil.ReadAll(configFile)
+
+	var config Config
+	err = json.Unmarshal(byteValue, &config)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	config.Informer = omdbInformer
 
 	movies := populateMovieList(path, config)
 	getMovieInformation(movies, config)
@@ -187,8 +197,4 @@ func main() {
 		}
 	})
 	http.ListenAndServe(":8080", nil)
-
-	// if err := report.Execute(os.Stdout, movies); err != nil {
-	// 	log.Fatal(err)
-	// }
 }

@@ -1,0 +1,8 @@
+{
+    "NameParserExpression":   [
+        "([\\p{L}\\d'\\._\\-!\\&, ]+)[_\\- \\.\\(]*(\\d{4})[_\\- \\.\\)]"
+    ],
+	"TitleCleanupExpression": "[\\.\\-_ ]",
+	"ExtensionExpression":    "(?i)(mp4|avi|mkv)",
+	"ApiKey":                 "c3658413"
+}
