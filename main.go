@@ -152,42 +152,6 @@ func getMovieInformation(movies []Movie, config Config) {
 	close(ch)
 }
 
-var report = template.Must(template.New("report").Parse(`
-<!DOCTYPE html>
-<html lang="en-US">
-<head>
-    <meta charset="UTF-8">
-    <meta name="MoviesList" content="width=device-width, initial-scale=1">
-    <title>Movies List</title>
-	<script src="https://kryogenix.org/code/browser/sorttable/sorttable.js"></script>
-	<link rel="stylesheet" href="/static/css/styles.css">
-</head>
-	<body>
-		<h1>{{. | len}} Movies found</h1>
-		<table id="hor-minimalist-a" class="sortable">
-			<tr style='text-align: left'>
-			<th>Title</th>
-			<th>Genre</th>
-			<th>Year</th>
-			<th>Runtime</th>
-			<th>Vote</th>
-			<th>Rate</th>
-			</tr>
-			{{range .}}
-			<tr>
-			<td title="{{.Plot}}"><a href="http://www.imdb.com/title/{{.ImdbID}}">{{.Title}}</a></td>
-			<td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}}, {{end}}{{$value}}{{end}}</td>
-			<td>{{.Year}}</td>
-			<td>{{.Runtime}}</td>
-			<td>{{.Vote}}</td>
-			<td>{{.Rate}}</td>
-			</tr>
-			{{end}}
-		</table>
-	</body>
-</html>
-`))
-
 func main() {
 	log.SetOutput(ioutil.Discard)
 	if len(os.Args) < 2 {
@@ -213,7 +177,9 @@ func main() {
 	movies := populateMovieList(path, config)
 	getMovieInformation(movies, config)
 
-	fs := http.FileServer(http.Dir("static/"))
+	report := template.Must(template.ParseFiles("assets/layout.html"))
+
+	fs := http.FileServer(http.Dir("assets/"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if err := report.Execute(w, movies); err != nil {
