@@ -1,3 +1,8 @@
+h1
+{
+	width: 100%;
+	text-align: center;
+}
 #hor-minimalist-a
 {
 	font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;
@@ -7,6 +12,8 @@
 	/* width: 480px; */
 	border-collapse: collapse;
 	text-align: left;
+	margin-left: auto;
+	margin-right: auto;
 }
 #hor-minimalist-a th
 {

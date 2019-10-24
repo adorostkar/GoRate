@@ -179,7 +179,7 @@ func main() {
 	var config Config
 	err = json.Unmarshal(byteValue, &config)
 	if err != nil {
-		fmt.Println(err)
+		log.Fatal(err)
 	}
 
 	config.Informer = omdbInformer
