@@ -42,7 +42,7 @@ type Config struct {
 	TitleCleanupExpression string
 	ExtensionExpression    string
 	APIKey                 string
-	Informer               InformerFunc
+	MovieAPI               string
 }
 
 func extractNameAndYear(basePath string, config Config) (string, int, error) {
@@ -99,6 +99,10 @@ func populateMovieList(path string, config Config) []Movie {
 	return movies
 }
 
+func emptyInformer(title string, year int, path string, config Config, ch chan Movie) {
+	ch <- Movie{Title: title, Year: year, Path: path}
+}
+
 func omdbInformer(title string, year int, path string, config Config, ch chan Movie) {
 	// when finished give done
 	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", config.APIKey, title, year)
@@ -140,10 +144,10 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot}
 }
 
-func getMovieInformation(movies []Movie, config Config) {
+func getMovieInformation(movies []Movie, config Config, informer InformerFunc) {
 	ch := make(chan Movie)
 	for _, m := range movies {
-		go config.Informer(m.Title, m.Year, m.Path, config, ch)
+		go informer(m.Title, m.Year, m.Path, config, ch)
 	}
 
 	lenM := len(movies)
@@ -152,6 +156,16 @@ func getMovieInformation(movies []Movie, config Config) {
 		movies[i] = m
 	}
 	close(ch)
+}
+
+func apiSelectFromName(name string) InformerFunc {
+	switch name {
+	case "omdb":
+		return omdbInformer
+	case "rt":
+		return emptyInformer
+	}
+	return emptyInformer
 }
 
 func main() {
@@ -169,9 +183,13 @@ func main() {
 	}
 	log.Printf("Given Path is %s\n", path)
 
-	configFile, err := os.Open("assets/config.json")
+	configFile, err := os.Open("assets/userConfig.json")
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
+		configFile, err = os.Open("assets/config.json")
+		if err != nil {
+			log.Fatal("No configuration file found.", err)
+		}
 	}
 	defer configFile.Close()
 
@@ -183,20 +201,36 @@ func main() {
 		log.Fatal(err)
 	}
 
-	config.Informer = omdbInformer
+	movieInformer := apiSelectFromName(config.MovieAPI)
 
 	movies := populateMovieList(path, config)
-	getMovieInformation(movies, config)
+	getMovieInformation(movies, config, movieInformer)
 	sort.Slice(movies, func(i, j int) bool {
 		return movies[i].Title < movies[j].Title
 	})
 
-	report := template.Must(template.ParseFiles("assets/layout.html"))
+	mainLayout := template.Must(template.ParseFiles("assets/mainLayout.html"))
+	settingsLayout := template.Must(template.ParseFiles("assets/settingsLayout.html"))
 
 	fs := http.FileServer(http.Dir("assets/"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
+		postVals := struct {
+			Success bool
+			Config
+		}{true, config}
+		if r.Method != http.MethodPost {
+			postVals.Success = false
+			if err := settingsLayout.Execute(w, postVals); err != nil {
+				log.Fatal(err)
+			}
+			return
+		}
+		//TODO: update and save config
+		settingsLayout.Execute(w, postVals)
+	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if err := report.Execute(w, movies); err != nil {
+		if err := mainLayout.Execute(w, movies); err != nil {
 			log.Fatal(err)
 		}
 	})

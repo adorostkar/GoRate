@@ -4,5 +4,6 @@
     ],
 	"TitleCleanupExpression": "[\\.\\-_ ]",
 	"ExtensionExpression":    "(?i)(mp4|avi|mkv)",
-	"ApiKey":                 "c3658413"
+    "APIKey":                 "c3658413",
+    "MovieAPI": "omdb"
 }
