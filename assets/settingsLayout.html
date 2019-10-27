@@ -5,28 +5,31 @@
   <meta charset="UTF-8">
   <meta name="Settings" content="width=device-width, initial-scale=1">
   <title>Settings</title>
+  <script src="/static/js/formCheck.js"></script>
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 
 <body>
   <h2>Program settings</h2>
-  {{if .Success}}
+  {{if eq .Success 0}}
     <h2>Configuration successfully updated</h2>
+  {{else if eq .Success 1}}
+    <h2 class="errorMsg">Faulty configuration given!! Not saved</h2>
   {{else}}
-    <form method="POST">
+    <form name="settingsForm" onsubmit="return(validateForm());" method="POST">
         <label>Accepted extensions (comma separated values):</label><br/>
-        <textarea rows="1" cols="60" name="extention">{{.ExtensionExpression}}</textarea><br/>
+        <textarea rows="1" cols="60" name="extension" required>{{.ExtensionExpression}}</textarea><br/>
         <label>Filename formats (one format per line):</label><br/>
-        <textarea rows="6" cols="60" name="nameparser">{{$first := true}}{{range $id, $value := .NameParserExpression}}{{if $first}}{{$first = false}}{{else}}\n{{end}}{{$value}}{{end}}</textarea><br/>
+        <textarea rows="6" cols="60" name="nameparser" required>{{$first := true}}{{range $id, $value := .NameParserExpression}}{{if $first}}{{$first = false}}{{else}}\n{{end}}{{$value}}{{end}}</textarea><br/>
         <label>Separators (slash seperated values):</label><br/>
-        <textarea rows="6" cols="60" name="separator">{{.TitleCleanupExpression}}</textarea><br/>
+        <textarea rows="1" cols="60" name="separator" required>{{.TitleCleanupExpression}}</textarea><br/>
         <label>Information provider:</label><br/>
-        <select>
+        <select name="informer">
           <option value="omdb">IMDB</option>
           <option value="rt">Rotten Tomato</option>
         </select><br/>
         <label>API key:</label><br/>
-        <textarea rows="1" cols="60" name="apiKey">{{.APIKey}}</textarea><br/>
+        <textarea rows="1" cols="60" name="apiKey" required>{{.APIKey}}</textarea><br/>
         <input type="submit">
     </form>
   {{end}}

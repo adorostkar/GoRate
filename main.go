@@ -43,6 +43,7 @@ type Config struct {
 	ExtensionExpression    string
 	APIKey                 string
 	MovieAPI               string
+	humanReadable          bool
 }
 
 func extractNameAndYear(basePath string, config Config) (string, int, error) {
@@ -73,7 +74,7 @@ func extractNameAndYear(basePath string, config Config) (string, int, error) {
 
 func populateMovieList(path string, config Config) []Movie {
 	var movies []Movie
-	r := regexp.MustCompile(config.ExtensionExpression)
+	r := regexp.MustCompile("(?i)" + config.ExtensionExpression)
 
 	err := filepath.Walk(path,
 		func(thisPath string, info os.FileInfo, err error) error {
@@ -216,17 +217,31 @@ func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
 		postVals := struct {
-			Success bool
+			Success int
 			Config
-		}{true, config}
+		}{0, config}
 		if r.Method != http.MethodPost {
-			postVals.Success = false
+			postVals.Success = 2
 			if err := settingsLayout.Execute(w, postVals); err != nil {
 				log.Fatal(err)
 			}
 			return
 		}
-		//TODO: update and save config
+
+		config = Config{
+			ExtensionExpression:    r.FormValue("extension"),
+			TitleCleanupExpression: r.FormValue("separator"),
+			NameParserExpression:   strings.Split(r.FormValue("nameparser"), "\n"),
+			APIKey:                 r.FormValue("apiKey"),
+			MovieAPI:               r.FormValue("informer"),
+		}
+
+		data, _ := json.MarshalIndent(config, "", "  ")
+		err := ioutil.WriteFile("assets/userConfig.json", data, 0644)
+		if err != nil {
+			log.Println("Can't save updated configurations", err)
+			postVals.Success = 1
+		}
 		settingsLayout.Execute(w, postVals)
 	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

@@ -3,7 +3,7 @@
         "([\\p{L}\\d'\\._\\-!\\&, ]+)[_\\- \\.\\(]*(\\d{4})[_\\- \\.\\)]"
     ],
 	"TitleCleanupExpression": "[\\.\\-_ ]",
-	"ExtensionExpression":    "(?i)(mp4|avi|mkv)",
+	"ExtensionExpression":    "(mp4|avi|mkv)",
     "APIKey":                 "c3658413",
     "MovieAPI": "omdb"
 }
