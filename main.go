@@ -169,21 +169,8 @@ func apiSelectFromName(name string) InformerFunc {
 	return emptyInformer
 }
 
-func main() {
-	log.SetOutput(ioutil.Discard)
-	if len(os.Args) < 2 {
-		log.Printf("%s\n", "Not enough input arguments")
-		fmt.Printf("%s\n", goUsage)
-		os.Exit(1)
-	}
-
-	path, err := filepath.Abs(os.Args[1])
-	if err != nil {
-		log.Fatal("Could not expand path")
-		os.Exit(1)
-	}
-	log.Printf("Given Path is %s\n", path)
-
+func loadConfig() Config {
+	var config Config
 	configFile, err := os.Open("assets/userConfig.json")
 	if err != nil {
 		log.Println(err)
@@ -196,25 +183,24 @@ func main() {
 
 	byteValue, _ := ioutil.ReadAll(configFile)
 
-	var config Config
 	err = json.Unmarshal(byteValue, &config)
 	if err != nil {
 		log.Fatal(err)
 	}
+	return config
+}
+func main() {
+	log.SetOutput(ioutil.Discard)
 
+	config := loadConfig()
 	movieInformer := apiSelectFromName(config.MovieAPI)
-
-	movies := populateMovieList(path, config)
-	getMovieInformation(movies, config, movieInformer)
-	sort.Slice(movies, func(i, j int) bool {
-		return movies[i].Title < movies[j].Title
-	})
 
 	mainLayout := template.Must(template.ParseFiles("assets/mainLayout.html"))
 	settingsLayout := template.Must(template.ParseFiles("assets/settingsLayout.html"))
 
 	fs := http.FileServer(http.Dir("assets/"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	// TODO: add functionality to be able to reset config
 	http.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
 		postVals := struct {
 			Success int
@@ -245,7 +231,20 @@ func main() {
 		settingsLayout.Execute(w, postVals)
 	})
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if err := mainLayout.Execute(w, movies); err != nil {
+		path := r.URL.Path[1:]
+		var msg string
+		movies := populateMovieList(path, config)
+		getMovieInformation(movies, config, movieInformer)
+		sort.Slice(movies, func(i, j int) bool {
+			return movies[i].Title < movies[j].Title
+		})
+		if len(movies) == 0 {
+			msg = `Please specify the path to the movie folder. e.g. localhost:8080/E:/Film`
+		}
+		if err := mainLayout.Execute(w, struct {
+			Msg    string
+			Movies []Movie
+		}{msg, movies}); err != nil {
 			log.Fatal(err)
 		}
 	})

@@ -10,7 +10,8 @@
 </head>
 
 <body>
-  <h1>{{. | len}} Movies found</h1>
+  <h1>{{.Movies | len}} Movies found</h1>
+  <h2>{{.Msg}}</h2>
   <table id="hor-minimalist-a" class="sortable">
     <tr style='text-align: left'>
       <th>Title</th>
@@ -20,7 +21,7 @@
       <th>Vote</th>
       <th>Rate</th>
     </tr>
-    {{range .}}
+    {{range .Movies}}
     <tr>
       <td onclick="location.href='http\://www.imdb.com/title/{{.ImdbID}}'">
         <div class="tooltip">
