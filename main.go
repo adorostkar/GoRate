@@ -26,15 +26,17 @@ type InformerFunc func(title string, year int, path string, config Config, ch ch
 
 // Movie information is saved in this struct
 type Movie struct {
-	Title   string
-	Path    string
-	Genre   []string
-	ImdbID  string
-	Runtime string
-	Year    int
-	Vote    int
-	Rate    float64
-	Plot    string
+	Title       string
+	Path        string
+	Genre       []string
+	ImdbID      string
+	Runtime     string
+	Year        int
+	Vote        int
+	Rate        float64
+	Plot        string
+	PosterImage string
+	Actors      string
 }
 
 // Config file to pass around
@@ -184,8 +186,10 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 		genre = strings.Split(ss, ",")
 	}
 	plot, _ := raw["Plot"].(string)
+	poster, _ := raw["Poster"].(string)
+	actors, _ := raw["Actors"].(string)
 
-	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot}
+	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot, poster, actors}
 }
 
 func getMovieInformation(movies []Movie, config Config, informer InformerFunc) {

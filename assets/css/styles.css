@@ -44,6 +44,7 @@ h1, h2 {
 
 .tooltip h3 {
     margin: 1px;
+    text-align: center;
 }
 
 .tooltip .right {
@@ -103,4 +104,12 @@ form
     max-width: 28em;
     margin-left: auto;
     margin-right: auto;
+}
+
+.poster 
+{
+    float: left;
+    height: 200px;
+    padding-right: 10px;
+    padding-bottom: 10px;
 }
