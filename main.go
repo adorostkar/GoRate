@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +12,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	log "github.com/sirupsen/logrus"
 )
 
 const goUsage = `GoRate is a tool to fetch information of movies listed under a folder
@@ -49,23 +50,40 @@ type Config struct {
 func extractNameAndYear(basePath string, config Config) (string, int, error) {
 	repl, err := regexp.Compile(config.TitleCleanupExpression)
 	if err != nil {
-		log.Printf("String '%s' is not a valid regular expression", config.TitleCleanupExpression)
+		log.WithFields(
+			log.Fields{
+				"topic": "regex",
+				"regex": config.TitleCleanupExpression,
+			}).Error("Not a valid regular expression")
 	}
 	for _, rs := range config.NameParserExpression {
 		extractor, err := regexp.Compile(rs)
 		if err != nil {
-			log.Printf("String '%s' is not a valid regular expression", rs)
+			log.WithFields(
+				log.Fields{
+					"topic": "regex",
+					"regex": rs,
+				}).Error("Not a valid regular expression")
 		}
 		matches := extractor.FindStringSubmatch(basePath)
 		if len(matches) == 0 {
-			log.Printf("Cannot extract info for file %s, with regex %s\n", basePath, rs)
+			log.WithFields(
+				log.Fields{
+					"topic":  "regex",
+					"regex":  rs,
+					"string": basePath,
+				}).Error("Cannot extract info")
 			continue
 		}
 
 		title := repl.ReplaceAllString(matches[1], " ")
 		year, err := strconv.Atoi(matches[2])
 		if err != nil {
-			log.Printf("Could not retrieve the year from its string %s\n", matches[2])
+			log.WithFields(
+				log.Fields{
+					"topic":  "regex",
+					"string": matches[2],
+				}).Error("Could not retrieve the year")
 		}
 		return title, year, err
 	}
@@ -81,21 +99,33 @@ func populateMovieList(path string, config Config) []Movie {
 			basePath := filepath.Base(thisPath)
 			fullPath, _ := filepath.Abs(thisPath)
 			if err != nil {
-				log.Printf("Couldn't process %s", basePath)
+				log.WithFields(
+					log.Fields{
+						"topic": "file",
+						"path":  basePath,
+					}).Errorf("Couldn't process")
 				return err
 			}
 			if r.MatchString(filepath.Ext(basePath)) {
 				title, year, err := extractNameAndYear(basePath, config)
 				if err != nil {
-					log.Println(err)
+					log.WithFields(
+						log.Fields{
+							"topic": "file",
+							"path":  basePath,
+						}).Error(err)
 				}
 				movies = append(movies, Movie{Title: title, Path: fullPath, Year: year})
-				log.Printf("%s, %s\n", basePath, filepath.Ext(basePath))
+				log.WithFields(
+					log.Fields{
+						"topic": "file",
+						"path":  basePath,
+					}).Trace(filepath.Ext(basePath))
 			}
 			return nil
 		})
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 	}
 	return movies
 }
@@ -108,10 +138,19 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 	// when finished give done
 	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", config.APIKey, title, year)
 	apiHTTP = strings.ReplaceAll(apiHTTP, " ", "%20")
-	log.Println(apiHTTP)
+	log.WithFields(
+		log.Fields{
+			"topic": "Movie",
+			"Url":   apiHTTP,
+		}).Trace("")
 	resp, err := http.Get(apiHTTP)
 	if err != nil {
-		log.Printf("Error getting movie details for %s", apiHTTP)
+		log.WithFields(
+			log.Fields{
+				"topic": "Movie",
+				"name":  title,
+				"Url":   apiHTTP,
+			}).Error("Could not fetch")
 		return
 	}
 	defer resp.Body.Close()
@@ -120,7 +159,11 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 	var raw map[string]interface{}
 	json.Unmarshal(data, &raw)
 	if raw["Response"].(string) == "False" {
-		log.Printf("Movie %s not found", title)
+		log.WithFields(
+			log.Fields{
+				"topic": "Movie",
+				"name":  title,
+			}).Trace("Not found")
 		return
 	}
 	var (
@@ -173,10 +216,16 @@ func loadConfig() Config {
 	var config Config
 	configFile, err := os.Open("assets/userConfig.json")
 	if err != nil {
-		log.Println(err)
+		log.WithFields(
+			log.Fields{
+				"topic": "config",
+			}).Info(err)
 		configFile, err = os.Open("assets/config.json")
 		if err != nil {
-			log.Fatal("No configuration file found.", err)
+			log.WithFields(
+				log.Fields{
+					"topic": "config",
+				}).Fatal("No configuration file found.", err)
 		}
 	}
 	defer configFile.Close()
@@ -189,8 +238,10 @@ func loadConfig() Config {
 	}
 	return config
 }
+
 func main() {
-	log.SetOutput(ioutil.Discard)
+	log.SetFormatter(&log.TextFormatter{})
+	log.SetLevel(log.WarnLevel)
 
 	config := loadConfig()
 	movieInformer := apiSelectFromName(config.MovieAPI)
@@ -209,7 +260,10 @@ func main() {
 		if r.Method != http.MethodPost {
 			postVals.Success = 2
 			if err := settingsLayout.Execute(w, postVals); err != nil {
-				log.Fatal(err)
+				log.WithFields(
+					log.Fields{
+						"topic": "settingsLayout",
+					}).Fatal(err)
 			}
 			return
 		}
@@ -225,7 +279,10 @@ func main() {
 		data, _ := json.MarshalIndent(config, "", "  ")
 		err := ioutil.WriteFile("assets/userConfig.json", data, 0644)
 		if err != nil {
-			log.Println("Can't save updated configurations", err)
+			log.WithFields(
+				log.Fields{
+					"topic": "config",
+				}).Info("Can't save updated configurations", err)
 			postVals.Success = 1
 		}
 		settingsLayout.Execute(w, postVals)
@@ -245,8 +302,14 @@ func main() {
 			Msg    string
 			Movies []Movie
 		}{msg, movies}); err != nil {
-			log.Fatal(err)
+			log.WithFields(
+				log.Fields{
+					"topic": "mainLayout",
+				}).Fatal(err)
 		}
 	})
-	http.ListenAndServe(":8080", nil)
+	log.WithFields(
+		log.Fields{
+			"topic": "main",
+		}).Fatal(http.ListenAndServe(":8080", nil))
 }
