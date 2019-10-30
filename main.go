@@ -37,6 +37,7 @@ type Movie struct {
 	Plot        string
 	PosterImage string
 	Actors      string
+	Director    string
 }
 
 // Config file to pass around
@@ -89,10 +90,13 @@ func extractNameAndYear(basePath string, config Config) (string, int, error) {
 		}
 		return title, year, err
 	}
-	return "", 0, fmt.Errorf("Could not extract info with any of the provided regular expressions for the movie %s", basePath)
+	return "", 0, fmt.Errorf("Could not extract info for %s", basePath)
 }
 
 func populateMovieList(path string, config Config) []Movie {
+	log.WithFields(log.Fields{
+		"topic": "file",
+	}).Trace("Entered populateMovieList")
 	var movies []Movie
 	r := regexp.MustCompile("(?i)" + config.ExtensionExpression)
 
@@ -100,14 +104,6 @@ func populateMovieList(path string, config Config) []Movie {
 		func(thisPath string, info os.FileInfo, err error) error {
 			basePath := filepath.Base(thisPath)
 			fullPath, _ := filepath.Abs(thisPath)
-			if err != nil {
-				log.WithFields(
-					log.Fields{
-						"topic": "file",
-						"path":  basePath,
-					}).Errorf("Couldn't process")
-				return err
-			}
 			if r.MatchString(filepath.Ext(basePath)) {
 				title, year, err := extractNameAndYear(basePath, config)
 				if err != nil {
@@ -116,19 +112,24 @@ func populateMovieList(path string, config Config) []Movie {
 							"topic": "file",
 							"path":  basePath,
 						}).Error(err)
+					title = basePath
 				}
 				movies = append(movies, Movie{Title: title, Path: fullPath, Year: year})
-				log.WithFields(
-					log.Fields{
-						"topic": "file",
-						"path":  basePath,
-					}).Trace(filepath.Ext(basePath))
+				log.WithFields(log.Fields{
+					"topic":  "file",
+					"movies": movies,
+				}).Trace("movie added")
 			}
 			return nil
 		})
 	if err != nil {
 		log.Error(err)
 	}
+
+	defer log.WithFields(log.Fields{
+		"topic":  "file",
+		"movies": movies,
+	}).Trace("Exit populateMovieList")
 	return movies
 }
 
@@ -153,6 +154,7 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 				"name":  title,
 				"Url":   apiHTTP,
 			}).Error("Could not fetch")
+		ch <- Movie{Title: title}
 		return
 	}
 	defer resp.Body.Close()
@@ -166,6 +168,7 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 				"topic": "Movie",
 				"name":  title,
 			}).Trace("Not found")
+		ch <- Movie{Title: title}
 		return
 	}
 	var (
@@ -188,8 +191,9 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 	plot, _ := raw["Plot"].(string)
 	poster, _ := raw["Poster"].(string)
 	actors, _ := raw["Actors"].(string)
+	director, _ := raw["Director"].(string)
 
-	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot, poster, actors}
+	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot, poster, actors, director}
 }
 
 func getMovieInformation(movies []Movie, config Config, informer InformerFunc) {
