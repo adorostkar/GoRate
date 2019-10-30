@@ -16,10 +16,13 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const goUsage = `GoRate is a tool to fetch information of movies listed under a folder
+const goUsage = `GoRate is a tool to fetch information of artifact listed under a folder
 
 USAGE: gr <folder paths>
 `
+
+// InformerFunc is the function type that ''in some way'' retrieves the movie details
+type InformerFunc func(title string, year int, path string, config Configurer, ch chan Movie)
 
 // Configurer TODO: write something
 type Configurer interface {
@@ -27,55 +30,7 @@ type Configurer interface {
 	TitleCleanupRegex() string
 	ExtensionRegex() string
 	APIKey() string
-}
-
-// InformerFunc is the function type that ''in some way'' retrieves the movie details
-type InformerFunc func(title string, year int, path string, config Configurer, ch chan Movie)
-
-// Movie information is saved in this struct
-type Movie struct {
-	Title       string
-	Path        string
-	Genre       []string
-	ImdbID      string
-	Runtime     string
-	Year        int
-	Vote        int
-	Rate        float64
-	Plot        string
-	PosterImage string
-	Actors      string
-	Director    string
-}
-
-// Config file to pass around
-type Config struct {
-	NameParserExpression   []string
-	TitleCleanupExpression string
-	ExtensionExpression    string
-	Key                    string `json:"APIKey"`
-	APIProvider            string
-	humanReadable          bool
-}
-
-// TitleParserRegex todo
-func (c Config) TitleParserRegex() []string {
-	return c.NameParserExpression
-}
-
-// TitleCleanupRegex todo
-func (c Config) TitleCleanupRegex() string {
-	return c.TitleCleanupExpression
-}
-
-// ExtensionRegex todo
-func (c Config) ExtensionRegex() string {
-	return c.ExtensionExpression
-}
-
-// APIKey regex
-func (c Config) APIKey() string {
-	return c.Key
+	Informer() InformerFunc
 }
 
 func extractTitleAndYear(basePath string, config Configurer) (string, int, error) {
@@ -125,7 +80,7 @@ func populateCollection(path string, config Configurer) []Movie {
 	log.WithFields(log.Fields{
 		"topic": "file",
 	}).Trace("Entered populateMovieList")
-	var movies []Movie
+	var artifacts []Movie
 	r := regexp.MustCompile("(?i)" + config.ExtensionRegex())
 
 	err := filepath.Walk(path,
@@ -142,10 +97,10 @@ func populateCollection(path string, config Configurer) []Movie {
 						}).Error(err)
 					title = basePath
 				}
-				movies = append(movies, Movie{Title: title, Path: fullPath, Year: year})
+				artifacts = append(artifacts, Movie{Title: title, Path: fullPath, Year: year})
 				log.WithFields(log.Fields{
-					"topic":  "file",
-					"movies": movies,
+					"topic":     "file",
+					"artifacts": artifacts,
 				}).Trace("movie added")
 			}
 			return nil
@@ -155,28 +110,84 @@ func populateCollection(path string, config Configurer) []Movie {
 	}
 
 	defer log.WithFields(log.Fields{
-		"topic":  "file",
-		"movies": movies,
+		"topic":     "file",
+		"artifacts": artifacts,
 	}).Trace("Exit populateMovieList")
-	return movies
+	return artifacts
+}
+
+func getArtifactInformation(artifacts []Movie, config Configurer) {
+	ch := make(chan Movie)
+	for _, m := range artifacts {
+		go config.Informer()(m.Title, m.Year, m.Path, config, ch)
+	}
+
+	lenM := len(artifacts)
+	for i := 0; i < lenM; i++ {
+		m := <-ch
+		artifacts[i] = m
+	}
+	close(ch)
 }
 
 func emptyInformer(title string, year int, path string, config Configurer, ch chan Movie) {
 	ch <- Movie{Title: title, Year: year, Path: path}
 }
 
-func getMovieInformation(movies []Movie, config Configurer, informer InformerFunc) {
-	ch := make(chan Movie)
-	for _, m := range movies {
-		go informer(m.Title, m.Year, m.Path, config, ch)
-	}
+// Movie information is saved in this struct
+type Movie struct {
+	Title       string
+	Path        string
+	Genre       []string
+	ImdbID      string
+	Runtime     string
+	Year        int
+	Vote        int
+	Rate        float64
+	Plot        string
+	PosterImage string
+	Actors      string
+	Director    string
+}
 
-	lenM := len(movies)
-	for i := 0; i < lenM; i++ {
-		m := <-ch
-		movies[i] = m
+// Config file to pass around
+type Config struct {
+	NameParserExpression   []string
+	TitleCleanupExpression string
+	ExtensionExpression    string
+	Key                    string `json:"APIKey"`
+	APIProvider            string
+}
+
+// TitleParserRegex todo
+func (c Config) TitleParserRegex() []string {
+	return c.NameParserExpression
+}
+
+// TitleCleanupRegex todo
+func (c Config) TitleCleanupRegex() string {
+	return c.TitleCleanupExpression
+}
+
+// ExtensionRegex todo
+func (c Config) ExtensionRegex() string {
+	return c.ExtensionExpression
+}
+
+// APIKey regex
+func (c Config) APIKey() string {
+	return c.Key
+}
+
+// Informer returns the retriever method
+func (c Config) Informer() InformerFunc {
+	switch c.APIProvider {
+	case "omdb":
+		return omdbInformer
+	case "rt":
+		return emptyInformer
 	}
-	close(ch)
+	return emptyInformer
 }
 
 func omdbInformer(title string, year int, path string, config Configurer, ch chan Movie) {
@@ -238,16 +249,6 @@ func omdbInformer(title string, year int, path string, config Configurer, ch cha
 	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot, poster, actors, director}
 }
 
-func apiSelectFromName(name string) InformerFunc {
-	switch name {
-	case "omdb":
-		return omdbInformer
-	case "rt":
-		return emptyInformer
-	}
-	return emptyInformer
-}
-
 func loadConfig() Config {
 	var config Config
 	configFile, err := os.Open("assets/userConfig.json")
@@ -275,23 +276,23 @@ func loadConfig() Config {
 	return config
 }
 
-func mainHandler(config Config, informer InformerFunc) func(http.ResponseWriter, *http.Request) {
+func mainHandler(config Config) func(http.ResponseWriter, *http.Request) {
 	mainLayout := template.Must(template.ParseFiles("assets/mainLayout.html"))
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path[1:]
 		var msg string
-		movies := populateCollection(path, config)
-		getMovieInformation(movies, config, informer)
-		sort.Slice(movies, func(i, j int) bool {
-			return movies[i].Title < movies[j].Title
+		artifacts := populateCollection(path, config)
+		getArtifactInformation(artifacts, config)
+		sort.Slice(artifacts, func(i, j int) bool {
+			return artifacts[i].Title < artifacts[j].Title
 		})
-		if len(movies) == 0 {
+		if len(artifacts) == 0 {
 			msg = `Please specify the path to the movie folder. e.g. localhost:8080/E:/Film`
 		}
 		if err := mainLayout.Execute(w, struct {
 			Msg    string
 			Movies []Movie
-		}{msg, movies}); err != nil {
+		}{msg, artifacts}); err != nil {
 			log.WithFields(
 				log.Fields{
 					"topic": "mainLayout",
@@ -345,13 +346,12 @@ func main() {
 	log.SetLevel(log.WarnLevel)
 
 	config := loadConfig()
-	informer := apiSelectFromName(config.APIProvider)
 
 	fs := http.FileServer(http.Dir("assets/"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	// TODO: add functionality to be able to reset config
 	http.HandleFunc("/settings", settingsHandler(config))
-	http.HandleFunc("/", mainHandler(config, informer))
+	http.HandleFunc("/", mainHandler(config))
 
 	log.WithFields(
 		log.Fields{
