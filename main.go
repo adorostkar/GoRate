@@ -21,8 +21,16 @@ const goUsage = `GoRate is a tool to fetch information of movies listed under a 
 USAGE: gr <folder paths>
 `
 
+// Configurer TODO: write something
+type Configurer interface {
+	TitleParserRegex() []string
+	TitleCleanupRegex() string
+	ExtensionRegex() string
+	APIKey() string
+}
+
 // InformerFunc is the function type that ''in some way'' retrieves the movie details
-type InformerFunc func(title string, year int, path string, config Config, ch chan Movie)
+type InformerFunc func(title string, year int, path string, config Configurer, ch chan Movie)
 
 // Movie information is saved in this struct
 type Movie struct {
@@ -45,21 +53,41 @@ type Config struct {
 	NameParserExpression   []string
 	TitleCleanupExpression string
 	ExtensionExpression    string
-	APIKey                 string
+	Key                    string `json:"APIKey"`
 	APIProvider            string
 	humanReadable          bool
 }
 
-func extractNameAndYear(basePath string, config Config) (string, int, error) {
-	repl, err := regexp.Compile(config.TitleCleanupExpression)
+// TitleParserRegex todo
+func (c Config) TitleParserRegex() []string {
+	return c.NameParserExpression
+}
+
+// TitleCleanupRegex todo
+func (c Config) TitleCleanupRegex() string {
+	return c.TitleCleanupExpression
+}
+
+// ExtensionRegex todo
+func (c Config) ExtensionRegex() string {
+	return c.ExtensionExpression
+}
+
+// APIKey regex
+func (c Config) APIKey() string {
+	return c.Key
+}
+
+func extractTitleAndYear(basePath string, config Configurer) (string, int, error) {
+	repl, err := regexp.Compile(config.TitleCleanupRegex())
 	if err != nil {
 		log.WithFields(
 			log.Fields{
 				"topic": "regex",
-				"regex": config.TitleCleanupExpression,
+				"regex": config.TitleCleanupRegex(),
 			}).Error("Not a valid regular expression")
 	}
-	for _, rs := range config.NameParserExpression {
+	for _, rs := range config.TitleParserRegex() {
 		extractor, err := regexp.Compile(rs)
 		if err != nil {
 			log.WithFields(
@@ -93,19 +121,19 @@ func extractNameAndYear(basePath string, config Config) (string, int, error) {
 	return "", 0, fmt.Errorf("Could not extract info for %s", basePath)
 }
 
-func populateMovieList(path string, config Config) []Movie {
+func populateCollection(path string, config Configurer) []Movie {
 	log.WithFields(log.Fields{
 		"topic": "file",
 	}).Trace("Entered populateMovieList")
 	var movies []Movie
-	r := regexp.MustCompile("(?i)" + config.ExtensionExpression)
+	r := regexp.MustCompile("(?i)" + config.ExtensionRegex())
 
 	err := filepath.Walk(path,
 		func(thisPath string, info os.FileInfo, err error) error {
 			basePath := filepath.Base(thisPath)
 			fullPath, _ := filepath.Abs(thisPath)
 			if r.MatchString(filepath.Ext(basePath)) {
-				title, year, err := extractNameAndYear(basePath, config)
+				title, year, err := extractTitleAndYear(basePath, config)
 				if err != nil {
 					log.WithFields(
 						log.Fields{
@@ -133,13 +161,27 @@ func populateMovieList(path string, config Config) []Movie {
 	return movies
 }
 
-func emptyInformer(title string, year int, path string, config Config, ch chan Movie) {
+func emptyInformer(title string, year int, path string, config Configurer, ch chan Movie) {
 	ch <- Movie{Title: title, Year: year, Path: path}
 }
 
-func omdbInformer(title string, year int, path string, config Config, ch chan Movie) {
+func getMovieInformation(movies []Movie, config Configurer, informer InformerFunc) {
+	ch := make(chan Movie)
+	for _, m := range movies {
+		go informer(m.Title, m.Year, m.Path, config, ch)
+	}
+
+	lenM := len(movies)
+	for i := 0; i < lenM; i++ {
+		m := <-ch
+		movies[i] = m
+	}
+	close(ch)
+}
+
+func omdbInformer(title string, year int, path string, config Configurer, ch chan Movie) {
 	// when finished give done
-	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", config.APIKey, title, year)
+	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", config.APIKey(), title, year)
 	apiHTTP = strings.ReplaceAll(apiHTTP, " ", "%20")
 	log.WithFields(
 		log.Fields{
@@ -196,20 +238,6 @@ func omdbInformer(title string, year int, path string, config Config, ch chan Mo
 	ch <- Movie{title, path, genre, imdbID, runtime, year, vote, rate, plot, poster, actors, director}
 }
 
-func getMovieInformation(movies []Movie, config Config, informer InformerFunc) {
-	ch := make(chan Movie)
-	for _, m := range movies {
-		go informer(m.Title, m.Year, m.Path, config, ch)
-	}
-
-	lenM := len(movies)
-	for i := 0; i < lenM; i++ {
-		m := <-ch
-		movies[i] = m
-	}
-	close(ch)
-}
-
 func apiSelectFromName(name string) InformerFunc {
 	switch name {
 	case "omdb":
@@ -252,7 +280,7 @@ func mainHandler(config Config, informer InformerFunc) func(http.ResponseWriter,
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path[1:]
 		var msg string
-		movies := populateMovieList(path, config)
+		movies := populateCollection(path, config)
 		getMovieInformation(movies, config, informer)
 		sort.Slice(movies, func(i, j int) bool {
 			return movies[i].Title < movies[j].Title
@@ -294,7 +322,7 @@ func settingsHandler(config Config) func(http.ResponseWriter, *http.Request) {
 			ExtensionExpression:    r.FormValue("extension"),
 			TitleCleanupExpression: r.FormValue("separator"),
 			NameParserExpression:   strings.Split(r.FormValue("nameparser"), "\n"),
-			APIKey:                 r.FormValue("apiKey"),
+			Key:                    r.FormValue("apiKey"),
 			APIProvider:            r.FormValue("informer"),
 		}
 
