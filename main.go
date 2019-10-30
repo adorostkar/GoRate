@@ -46,7 +46,7 @@ type Config struct {
 	TitleCleanupExpression string
 	ExtensionExpression    string
 	APIKey                 string
-	MovieAPI               string
+	APIProvider            string
 	humanReadable          bool
 }
 
@@ -247,20 +247,34 @@ func loadConfig() Config {
 	return config
 }
 
-func main() {
-	log.SetFormatter(&log.TextFormatter{})
-	log.SetLevel(log.WarnLevel)
-
-	config := loadConfig()
-	movieInformer := apiSelectFromName(config.MovieAPI)
-
+func mainHandler(config Config, informer InformerFunc) func(http.ResponseWriter, *http.Request) {
 	mainLayout := template.Must(template.ParseFiles("assets/mainLayout.html"))
-	settingsLayout := template.Must(template.ParseFiles("assets/settingsLayout.html"))
+	return func(w http.ResponseWriter, r *http.Request) {
+		path := r.URL.Path[1:]
+		var msg string
+		movies := populateMovieList(path, config)
+		getMovieInformation(movies, config, informer)
+		sort.Slice(movies, func(i, j int) bool {
+			return movies[i].Title < movies[j].Title
+		})
+		if len(movies) == 0 {
+			msg = `Please specify the path to the movie folder. e.g. localhost:8080/E:/Film`
+		}
+		if err := mainLayout.Execute(w, struct {
+			Msg    string
+			Movies []Movie
+		}{msg, movies}); err != nil {
+			log.WithFields(
+				log.Fields{
+					"topic": "mainLayout",
+				}).Fatal(err)
+		}
+	}
+}
 
-	fs := http.FileServer(http.Dir("assets/"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
-	// TODO: add functionality to be able to reset config
-	http.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
+func settingsHandler(config Config) func(http.ResponseWriter, *http.Request) {
+	settingsLayout := template.Must(template.ParseFiles("assets/settingsLayout.html"))
+	return func(w http.ResponseWriter, r *http.Request) {
 		postVals := struct {
 			Success int
 			Config
@@ -281,7 +295,7 @@ func main() {
 			TitleCleanupExpression: r.FormValue("separator"),
 			NameParserExpression:   strings.Split(r.FormValue("nameparser"), "\n"),
 			APIKey:                 r.FormValue("apiKey"),
-			MovieAPI:               r.FormValue("informer"),
+			APIProvider:            r.FormValue("informer"),
 		}
 
 		data, _ := json.MarshalIndent(config, "", "  ")
@@ -292,30 +306,25 @@ func main() {
 					"topic": "config",
 				}).Info("Can't save updated configurations", err)
 			postVals.Success = 1
+			postVals.Config = config
 		}
 		settingsLayout.Execute(w, postVals)
-	})
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[1:]
-		var msg string
-		movies := populateMovieList(path, config)
-		getMovieInformation(movies, config, movieInformer)
-		sort.Slice(movies, func(i, j int) bool {
-			return movies[i].Title < movies[j].Title
-		})
-		if len(movies) == 0 {
-			msg = `Please specify the path to the movie folder. e.g. localhost:8080/E:/Film`
-		}
-		if err := mainLayout.Execute(w, struct {
-			Msg    string
-			Movies []Movie
-		}{msg, movies}); err != nil {
-			log.WithFields(
-				log.Fields{
-					"topic": "mainLayout",
-				}).Fatal(err)
-		}
-	})
+	}
+}
+
+func main() {
+	log.SetFormatter(&log.TextFormatter{})
+	log.SetLevel(log.WarnLevel)
+
+	config := loadConfig()
+	informer := apiSelectFromName(config.APIProvider)
+
+	fs := http.FileServer(http.Dir("assets/"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	// TODO: add functionality to be able to reset config
+	http.HandleFunc("/settings", settingsHandler(config))
+	http.HandleFunc("/", mainHandler(config, informer))
+
 	log.WithFields(
 		log.Fields{
 			"topic": "main",
