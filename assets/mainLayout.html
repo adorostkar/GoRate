@@ -6,12 +6,19 @@
   <meta name="MoviesList" content="width=device-width, initial-scale=1">
   <title>Movies List</title>
   <script src="https://kryogenix.org/code/browser/sorttable/sorttable.js"></script>
+  <script src="/static/js/functions.js"></script>
   <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 
 <body>
+  {{if .Movies}}
   <h1>{{.Movies | len}} Movies found</h1>
+  {{else}}
+  <h1>No movies found</h1>
+  {{end}}
   <h2>{{.Msg}}</h2>
+  {{if .Movies}}
+  <div class="search">Filter: <input class="searchTB" type="text" onkeyup="filterMovies()" placeholder="Search for Genre .." autofocus/></div>
   <table id="hor-minimalist-a" class="sortable">
     <tr style='text-align: left'>
       <th>Title</th>
@@ -47,6 +54,7 @@
     </tr>
     {{end}}
   </table>
+  {{end}}
 </body>
 
 </html>

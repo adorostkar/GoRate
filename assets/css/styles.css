@@ -113,3 +113,14 @@ form
     padding-right: 10px;
     padding-bottom: 10px;
 }
+
+.search
+{
+    text-align: center;
+    vertical-align: middle;
+} 
+
+.searchTB
+{
+    width: 20%;
+}
