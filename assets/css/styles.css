@@ -48,7 +48,7 @@ h1, h2 {
 }
 
 .tooltip .right {
-    min-width: 600px;
+    width: 50vw;
     top: 50%;
     left: 100%;
     margin-left: 20px;
@@ -109,7 +109,7 @@ form
 .poster 
 {
     float: left;
-    height: 200px;
+    height: 250px;
     padding-right: 10px;
     padding-bottom: 10px;
 }
