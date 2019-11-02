@@ -17,11 +17,11 @@
     <h2 class="errorMsg">Faulty configuration given!! Not saved</h2>
   {{else}}
     <form name="settingsForm" onsubmit="return(validateForm());" method="POST">
-        <label>Accepted extensions (comma separated values):</label><br/>
+        <label>Accepted extensions:</label><br/>
         <textarea rows="1" cols="60" name="extension" required>{{.ExtensionExpression}}</textarea><br/>
         <label>Filename formats (one format per line):</label><br/>
         <textarea rows="6" cols="60" name="nameparser" required>{{$first := true}}{{range $id, $value := .NameParserExpression}}{{if $first}}{{$first = false}}{{else}}\n{{end}}{{$value}}{{end}}</textarea><br/>
-        <label>Separators (slash seperated values):</label><br/>
+        <label>Separators:</label><br/>
         <textarea rows="1" cols="60" name="separator" required>{{.TitleCleanupExpression}}</textarea><br/>
         <label>Information provider:</label><br/>
         <select name="informer">

@@ -301,6 +301,7 @@ func mainHandler(config Config) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+// TODO: add functionality to be able to reset config
 func settingsHandler(config Config) func(http.ResponseWriter, *http.Request) {
 	settingsLayout := template.Must(template.ParseFiles("assets/settingsLayout.html"))
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -349,7 +350,6 @@ func main() {
 
 	fs := http.FileServer(http.Dir("assets/"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
-	// TODO: add functionality to be able to reset config
 	http.HandleFunc("/settings", settingsHandler(config))
 	http.HandleFunc("/", mainHandler(config))
 

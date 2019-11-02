@@ -35,18 +35,22 @@
           {{.Title}}
           <div class="right">
               <h3>{{.Title}}</h3>
-              <img class="poster" src="{{.PosterImage}}" alt="movie poster">
-              <div>
+              <div class="row">
+              <div class="column">
+                <img class="poster" src="{{.PosterImage}}" alt="movie poster">
+              </div>
+              <div class="column">
                 <p>{{.Plot}}</p>
                 <p><b>Director:</b><br/>{{.Director}}</p>
                 <p><b>Actors:</b><br/>{{.Actors}}</p>
+                <p><b>Genre:</b><br/>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}</p>
+              </div>
               </div>
               <i></i>
           </div>
         </div>
       </td>
-      <td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}
-      </td>
+      <td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}</td>
       <td>{{.Year}}</td>
       <td>{{.Runtime}}</td>
       <td>{{.Vote}}</td>
