@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -22,7 +23,7 @@ USAGE: gr <folder paths>
 `
 
 // InformerFunc is the function type that ''in some way'' retrieves the movie details
-type InformerFunc func(title string, year int, path string, config Configurer, ch chan Movie)
+type InformerFunc func(title string, year int, path string, config Configurer, ch chan<- Movie, wg *sync.WaitGroup)
 
 // Configurer TODO: write something
 type Configurer interface {
@@ -76,11 +77,15 @@ func extractTitleAndYear(basePath string, config Configurer) (string, int, error
 	return "", 0, fmt.Errorf("Could not extract info for %s", basePath)
 }
 
-func populateCollection(path string, config Configurer) []Movie {
+func populateCollection(path string, config Configurer, out chan<- Movie) {
 	log.WithFields(log.Fields{
 		"topic": "file",
 	}).Trace("Entered populateMovieList")
-	var artifacts []Movie
+
+	defer log.WithFields(log.Fields{
+		"topic": "file",
+	}).Trace("Exit populateMovieList")
+
 	r := regexp.MustCompile("(?i)" + config.ExtensionRegex())
 
 	err := filepath.Walk(path,
@@ -97,10 +102,10 @@ func populateCollection(path string, config Configurer) []Movie {
 						}).Error(err)
 					title = basePath
 				}
-				artifacts = append(artifacts, Movie{Title: title, Path: fullPath, Year: year})
+				out <- Movie{Title: title, Path: fullPath, Year: year}
 				log.WithFields(log.Fields{
 					"topic":     "file",
-					"artifacts": artifacts,
+					"artifacts": title,
 				}).Trace("movie added")
 			}
 			return nil
@@ -109,28 +114,22 @@ func populateCollection(path string, config Configurer) []Movie {
 		log.Error(err)
 	}
 
-	defer log.WithFields(log.Fields{
-		"topic":     "file",
-		"artifacts": artifacts,
-	}).Trace("Exit populateMovieList")
-	return artifacts
+	close(out)
 }
 
-func getArtifactInformation(artifacts []Movie, config Configurer) {
-	ch := make(chan Movie)
-	for _, m := range artifacts {
-		go config.Informer()(m.Title, m.Year, m.Path, config, ch)
+func getArtifactInformation(config Configurer, in <-chan Movie, out chan<- Movie) {
+	var wg sync.WaitGroup
+	for m := range in {
+		wg.Add(1)
+		go config.Informer()(m.Title, m.Year, m.Path, config, out, &wg)
 	}
 
-	lenM := len(artifacts)
-	for i := 0; i < lenM; i++ {
-		m := <-ch
-		artifacts[i] = m
-	}
-	close(ch)
+	wg.Wait()
+	close(out)
 }
 
-func emptyInformer(title string, year int, path string, config Configurer, ch chan Movie) {
+func emptyInformer(title string, year int, path string, config Configurer, ch chan<- Movie, wg *sync.WaitGroup) {
+	defer wg.Done()
 	ch <- Movie{Title: title, Year: year, Path: path}
 }
 
@@ -190,7 +189,8 @@ func (c Config) Informer() InformerFunc {
 	return emptyInformer
 }
 
-func omdbInformer(title string, year int, path string, config Configurer, ch chan Movie) {
+func omdbInformer(title string, year int, path string, config Configurer, ch chan<- Movie, wg *sync.WaitGroup) {
+	defer wg.Done()
 	// when finished give done
 	apiHTTP := fmt.Sprintf("http://www.omdbapi.com/?apikey=%s&t=%s&y=%d", config.APIKey(), title, year)
 	apiHTTP = strings.ReplaceAll(apiHTTP, " ", "%20")
@@ -281,8 +281,14 @@ func mainHandler(config Config) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		path := r.URL.Path[1:]
 		var msg string
-		artifacts := populateCollection(path, config)
-		getArtifactInformation(artifacts, config)
+		var artifacts []Movie
+		populate := make(chan Movie)
+		retrieve := make(chan Movie)
+		go populateCollection(path, config, populate)
+		go getArtifactInformation(config, populate, retrieve)
+		for m := range retrieve {
+			artifacts = append(artifacts, m)
+		}
 		sort.Slice(artifacts, func(i, j int) bool {
 			return artifacts[i].Title < artifacts[j].Title
 		})
