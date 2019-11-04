@@ -282,8 +282,8 @@ func mainHandler(config Config) func(http.ResponseWriter, *http.Request) {
 		path := r.URL.Path[1:]
 		var msg string
 		var artifacts []Movie
-		populate := make(chan Movie)
-		retrieve := make(chan Movie)
+		populate := make(chan Movie, 20)
+		retrieve := make(chan Movie, 20)
 		go populateCollection(path, config, populate)
 		go getArtifactInformation(config, populate, retrieve)
 		for m := range retrieve {
