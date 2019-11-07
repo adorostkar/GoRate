@@ -87,9 +87,18 @@ func populateCollection(path string, config Configurer, out chan<- Movie) {
 	}).Trace("Exit populateMovieList")
 
 	r := regexp.MustCompile("(?i)" + config.ExtensionRegex())
+	hidden := regexp.MustCompile(`\\\.`)
 
 	err := filepath.Walk(path,
 		func(thisPath string, info os.FileInfo, err error) error {
+			if hidden.MatchString(thisPath) {
+				log.WithFields(
+					log.Fields{
+						"topic": "file",
+						"path":  thisPath,
+					}).Trace("skipped")
+				return nil
+			}
 			basePath := filepath.Base(thisPath)
 			fullPath, _ := filepath.Abs(thisPath)
 			if r.MatchString(filepath.Ext(basePath)) {

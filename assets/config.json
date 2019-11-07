@@ -1,6 +1,6 @@
 {
     "NameParserExpression":   [
-        "([\\p{L}\\d'\\._\\-!\\&, ]+)[_\\- \\.\\(]*(\\d{4})[_\\- \\.\\)]"
+        "([\\p{L}\\d'\\._\\-!\\&, ]+).*(\\b(19|20)\\d{2}\\b)"
     ],
 	"TitleCleanupExpression": "[\\.\\-_ ]",
 	"ExtensionExpression":    "(mp4|avi|mkv)",
