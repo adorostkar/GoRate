@@ -12,7 +12,7 @@
 
 <body>
   {{if .Movies}}
-  <h1>{{.Movies | len}} Movies found</h1>
+  <h1 id="numberOfMovies">{{.Movies | len}} Movies found</h1>
   {{else}}
   <h1>No movies found</h1>
   {{end}}

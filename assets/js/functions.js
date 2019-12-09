@@ -1,6 +1,7 @@
 function filterMovies() {
   // Declare variables
-  var input, filters, filter, table, tr, a, i, j, txtValue;
+  var input, filters, filter, table, tr, a, i, j, txtValue, nVis;
+  nVis = 0;
   input = document.getElementsByClassName('searchTB')[0];
   filters = input.value.split(" ");
   table = document.getElementsByClassName("sortable")[0];
@@ -12,6 +13,7 @@ function filterMovies() {
     }
   }
   // Loop through all list items, and hide those who don't match the search query
+  nVis = tr.length-1;
   for (i = 1; i < tr.length; i++) {
     for (j = 0; j < filters.length; j++) {
       filter = filters[j].toUpperCase();
@@ -21,8 +23,10 @@ function filterMovies() {
         tr[i].style.display = "";
       } else {
         tr[i].style.display = "none";
+        nVis--;
         break
       }
     }
   }
+  document.getElementById('numberOfMovies').innerHTML = nVis + ' Movies found';
 }
