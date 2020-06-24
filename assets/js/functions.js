@@ -1,23 +1,32 @@
 function areFiltersFound(trow, filters)
 {
+  var tds, td, i, j, filter, txtValue, searchColumns;
+  // [0, 1] ==> title, genre
+  // [0] ==> title
+  // [1] ==> genre
+  searchColumns = [1]; 
   tds = trow.getElementsByTagName("td");
 
-  td = tds[1];
-  txtValue = td.textContent || td.innerText;
-  txtValue = txtValue.toUpperCase();
 
-  for (j = 0; j < filters.length; j++) {
-    filter = filters[j].toUpperCase();
-    if (txtValue.indexOf(filter) < 0){
-      // if we don't find any of the filters then return false
-      return false;
+  for (i = 0; i < filters.length; i++) {
+    filter = filters[i].toUpperCase();
+    for (j = 0; j < searchColumns.length; j++) { 
+      td = tds[searchColumns[j]];
+      txtValue = td.textContent || td.innerText;
+      txtValue = txtValue.toUpperCase();
+      if (txtValue.indexOf(filter) > -1){
+        break;
+      } else {
+        // if we don't find any of the filters then return false
+        return false;
+      }
     }
   }
   return true;
 }
 function filterMovies() {
   // Declare variables
-  var input, filters, filter, table, tr, a, i, j, txtValue, nVis;
+  var input, filters, table, tr, i, nVis;
   nVis = 0;
   input = document.getElementsByClassName('searchTB')[0];
   filters = input.value.split(" ");
