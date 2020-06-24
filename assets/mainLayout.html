@@ -41,7 +41,8 @@
               </div>
               <div class="column">
                 <p>{{.Plot}}</p>
-                <p><b>Director:</b><br/>{{.Director}}</p>
+                <p><b>Year: </b>{{.Year}}</p>
+                <p><b>Director: </b>{{.Director}}</p>
                 <p><b>Actors:</b><br/>{{.Actors}}</p>
                 <p><b>Genre:</b><br/>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}</p>
               </div>

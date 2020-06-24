@@ -72,6 +72,8 @@ func extractTitleAndYear(basePath string, config Configurer) (string, int, error
 					"string": matches[2],
 				}).Error("Could not retrieve the year")
 		}
+
+		title = strings.TrimSpace(title)
 		return title, year, err
 	}
 	return "", 0, fmt.Errorf("Could not extract info for %s", basePath)
@@ -148,7 +150,7 @@ type Movie struct {
 	Path        string
 	Genre       []string
 	ImdbID      string
-	Runtime     string
+	Runtime     int
 	Year        int
 	Vote        int
 	Rate        float64
@@ -241,7 +243,8 @@ func omdbInformer(title string, year int, path string, config Configurer, ch cha
 	if ss, ok := raw["imdbRating"].(string); ok {
 		rate, _ = strconv.ParseFloat(ss, 2)
 	}
-	runtime, _ := raw["Runtime"].(string)
+	tempRuntime, _ := raw["Runtime"].(string)
+	runtime, _ := strconv.Atoi(tempRuntime[:len(tempRuntime)-4])
 	if ss, ok := raw["imdbVotes"].(string); ok {
 		ss = strings.ReplaceAll(ss, ",", "")
 		vote, _ = strconv.Atoi(ss)

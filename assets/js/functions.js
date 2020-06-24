@@ -1,3 +1,20 @@
+function areFiltersFound(trow, filters)
+{
+  tds = trow.getElementsByTagName("td");
+
+  td = tds[1];
+  txtValue = td.textContent || td.innerText;
+  txtValue = txtValue.toUpperCase();
+
+  for (j = 0; j < filters.length; j++) {
+    filter = filters[j].toUpperCase();
+    if (txtValue.indexOf(filter) < 0){
+      // if we don't find any of the filters then return false
+      return false;
+    }
+  }
+  return true;
+}
 function filterMovies() {
   // Declare variables
   var input, filters, filter, table, tr, a, i, j, txtValue, nVis;
@@ -15,17 +32,11 @@ function filterMovies() {
   // Loop through all list items, and hide those who don't match the search query
   nVis = tr.length-1;
   for (i = 1; i < tr.length; i++) {
-    for (j = 0; j < filters.length; j++) {
-      filter = filters[j].toUpperCase();
-      a = tr[i].getElementsByTagName("td")[1];
-      txtValue = a.textContent || a.innerText;
-      if (txtValue.toUpperCase().indexOf(filter) > -1) {
-        tr[i].style.display = "";
-      } else {
-        tr[i].style.display = "none";
-        nVis--;
-        break
-      }
+    if (areFiltersFound(tr[i], filters)) {
+      tr[i].style.display = "";
+    } else {
+      tr[i].style.display = "none";
+      nVis--;
     }
   }
   document.getElementById('numberOfMovies').innerHTML = nVis + ' Movies found';
