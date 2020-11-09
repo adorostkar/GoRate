@@ -291,9 +291,9 @@ func loadConfig() Config {
 func mainHandler(config Config) func(http.ResponseWriter, *http.Request) {
 	mainLayout := template.Must(template.ParseFiles("assets/mainLayout.html"))
 	return func(w http.ResponseWriter, r *http.Request) {
-		path := r.URL.Path[1:]
 		var msg string
 		var artifacts []Movie
+		path := r.URL.Query().Get("path")
 		populate := make(chan Movie, 20)
 		retrieve := make(chan Movie, 20)
 		go populateCollection(path, config, populate)
@@ -305,7 +305,7 @@ func mainHandler(config Config) func(http.ResponseWriter, *http.Request) {
 			return artifacts[i].Title < artifacts[j].Title
 		})
 		if len(artifacts) == 0 {
-			msg = `Please specify the path to the movie folder. e.g. localhost:8080/E:/Film`
+			msg = `Please specify the path to the movie folder. e.g. localhost:8080/?path=E:/Film`
 		}
 		if err := mainLayout.Execute(w, struct {
 			Msg    string
