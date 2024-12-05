@@ -1,65 +1,83 @@
 <!DOCTYPE html>
 <html lang="en-US">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="MoviesList" content="width=device-width, initial-scale=1" />
+    <title>Movies List</title>
+    <script src="/static/js/sortable.js"></script>
+    <script src="/static/js/functions.js"></script>
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="MoviesList" content="width=device-width, initial-scale=1">
-  <title>Movies List</title>
-  <script src="https://kryogenix.org/code/browser/sorttable/sorttable.js"></script>
-  <script src="/static/js/functions.js"></script>
-  <link rel="stylesheet" href="/static/css/styles.css">
-</head>
-
-<body>
-  {{if .Movies}}
-  <h1 id="numberOfMovies">{{.Movies | len}} Movies found</h1>
-  {{else}}
-  <h1>No movies found</h1>
-  {{end}}
-  <h2>{{.Msg}}</h2>
-  {{if .Movies}}
-  <div class="search">Filter: <input class="searchTB" type="text" onkeyup="filterMovies()" placeholder="Search for Genre .." autofocus/></div>
-  <table id="hor-minimalist-a" class="sortable">
-    <tr style='text-align: left'>
-      <th>Title</th>
-      <th>Genre</th>
-      <th>Year</th>
-      <th>Runtime</th>
-      <th>Vote</th>
-      <th>Rate</th>
-    </tr>
-    {{range .Movies}}
-    <tr>
-      <td onclick="location.href='http\://www.imdb.com/title/{{.ImdbID}}'">
-        <div class="tooltip">
-          {{.Title}}
-          <div class="right">
+  <body>
+    {{if .Movies}}
+    <h1 id="numberOfMovies">{{.Movies | len}} Movies found</h1>
+    {{else}}
+    <h1>No movies found</h1>
+    {{end}}
+    <h2>{{.Msg}}</h2>
+    {{if .Movies}}
+    <div class="search">
+      Filter:
+      <input
+        class="searchTB"
+        type="text"
+        onkeyup="filterMovies()"
+        placeholder="Search for Genre .."
+        autofocus
+      />
+    </div>
+    <table id="hor-minimalist-a" class="sortable">
+      <tr style="text-align: left">
+        <th>Title</th>
+        <th>Genre</th>
+        <th>Year</th>
+        <th>Runtime</th>
+        <th>Vote</th>
+        <th>Rate</th>
+      </tr>
+      {{range .Movies}}
+      <tr>
+        <td onclick="location.href='http\://www.imdb.com/title/{{.ImdbID}}'">
+          <div class="tooltip">
+            {{.Title}}
+            <div class="right">
               <h3>{{.Title}}</h3>
               <div class="row">
-              <div class="column">
-                <img class="poster" src="{{.PosterImage}}" alt="movie poster">
-              </div>
-              <div class="column">
-                <p>{{.Plot}}</p>
-                <p><b>Year: </b>{{.Year}}</p>
-                <p><b>Director: </b>{{.Director}}</p>
-                <p><b>Actors:</b><br/>{{.Actors}}</p>
-                <p><b>Genre:</b><br/>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}</p>
-              </div>
+                <div class="column">
+                  <img
+                    class="poster"
+                    src="{{.PosterImage}}"
+                    alt="movie poster"
+                  />
+                </div>
+                <div class="column">
+                  <p>{{.Plot}}</p>
+                  <p><b>Year: </b>{{.Year}}</p>
+                  <p><b>Director: </b>{{.Director}}</p>
+                  <p><b>Actors:</b><br />{{.Actors}}</p>
+                  <p>
+                    <b>Genre:</b><br />{{$first := true}}{{range $id, $value :=
+                    .Genre}}{{if $first}}{{$first =
+                    false}}{{else}},{{end}}{{$value}}{{end}}
+                  </p>
+                </div>
               </div>
               <i></i>
+            </div>
           </div>
-        </div>
-      </td>
-      <td>{{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first = false}}{{else}},{{end}}{{$value}}{{end}}</td>
-      <td>{{.Year}}</td>
-      <td>{{.Runtime}}</td>
-      <td>{{.Vote}}</td>
-      <td>{{.Rate}}</td>
-    </tr>
+        </td>
+        <td>
+          {{$first := true}}{{range $id, $value := .Genre}}{{if $first}}{{$first
+          = false}}{{else}},{{end}}{{$value}}{{end}}
+        </td>
+        <td>{{.Year}}</td>
+        <td>{{.Runtime}}</td>
+        <td>{{.Vote}}</td>
+        <td>{{.Rate}}</td>
+      </tr>
+      {{end}}
+    </table>
     {{end}}
-  </table>
-  {{end}}
-</body>
-
+  </body>
 </html>
